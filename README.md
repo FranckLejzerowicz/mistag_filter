@@ -7,8 +7,8 @@ The script necessitates at least a specific **fasta file** and an experimental *
 ## Fasta file
 Should contain a copy of each unique sequence for each sample. The header sequence descriptions must include at least three semi-colon separated fields starting with:
 * ```size=```: number of sequence read copies (integer)
-* ```for=``` (or ```fwd=```): name of the *forward* tagged primer found in the sample sequence
-* ```rev=``` (or ```rv=```): name of the *reverse* tagged primer found in the sample sequence
+* ```for=```: name of the *forward* tagged primer found in the sample sequence
+* ```rev=```: name of the *reverse* tagged primer found in the sample sequence
 
 #### example:
 ```
