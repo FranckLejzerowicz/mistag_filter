@@ -29,7 +29,8 @@ Should be a table containing the tags-to-samples information with samples as row
 * ```for```: forward tagged primer used to PCR-amplify the sequences of the sample
 * ```rev```: reverse tagged primer used to PCR-amplify the sequences of the sample
 
-# Example:
+# Example
+
 ```
 sample,for,rev
 S1,F515-X;R806-Y
@@ -37,20 +38,22 @@ S2,F515-R,R806-B
 ...
 ```
 A design provides the information about the expected samples and could be represented as a matrix, as follows for the above example:
- n | F515-A | F515-R | F515-? | F515-X | F515-Y
+
+n | F515-A | F515-R | F515-? | F515-X | F515-Y
 :---:|:---:|:---:|:---:|:---:|:---:
 R806-A | 0 | R | ... | X | 0 
 R806-B | B | 1 | ... | BX | B 
 R806-? | ... | ... | ... | ... | ...
 R806-X | 0 | R | ... | X | 0 
 R806-Y | Y | RY | ... | 1 | Y
+
 with the possible expected samples being labeled by a "1" while the resulting unexpected samples are labeled by the letter of one or the other tagged primer they have in common with the expected sample. These unexpected sample contain the non-critical mistag sequences. It is based on the distribution of each sequence in these unexpected samples ("orthogonal samples") that the filter computes the modified Thompson Tau test rejection region to decide whether a sequence in an expected sample is also a mistag and should be removed.
 
-## Reading and citing
+### Reading and citing
 Esling, P., Lejzerowicz, F., & Pawlowski, J. (2015). Accurate multiplexing and filtering for high-throughput amplicon-sequencing. _Nucleic acids research_, **43**(5), 2513-2524.
 Reference url: https://academic.oup.com/nar/article-lookup/doi/10.1093/nar/gkv107
 
-# Abstract extract
+# Abstract
 Tagging amplicons with tag sequences appended to PCR primers allow the multiplexing of numerous samples for high-throughput sequencing (HTS). This approach is routinely used in HTS-based diversity analyses, especially in microbial ecology and biomedical diagnostics. However, amplicon library preparation is subject to pervasive sample sequence cross-contaminations as a result of tag switching events referred to as mistagging. Here, we sequenced seven amplicon libraries prepared using various multiplexing designs in order to measure the magnitude of this phenomenon and its impact on diversity analyses. Up to 28.2% of the unique sequences correspond to undetectable (critical) mistags in single- or saturated double-tagging libraries. We show the advantage of multiplexing samples following Latin Square Designs in order to optimize the detection of mistags and maximize the information on their distribution across samples. We use this information in designs incorporating PCR replicates to **filter the critical mistags and to recover the exact composition** of mock community samples. Being **parameter-free and data-driven, our approach can provide more accurate and reproducible HTS data sets**, improving the reliability of their interpretations.
 
 ## Usage
@@ -78,7 +81,7 @@ mistag_filter.py [-h] -i I -d D [-o [O]] [-sep [SEP]] [-a [float between 0 and 1
                         region (default = not active)
 ```
 
-#### Requirements
+## Requirements
 Python2.7<br />
 numpy<br />
 scipy<br />
