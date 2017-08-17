@@ -4,7 +4,7 @@ Metabarcoding sequence abundance filter for projects involving combinations of s
 
 The script necessitates at least a specific **fasta file** and an experimental **design file** inputs.
 
-## fasta file
+### fasta file
 Should contain a copy of each unique sequence for each sample. The header sequence descriptions must include at least three semi-colon separated fields starting with:
 * ```size=```: number of sequence read copies (integer)
 * ```for=``` (or ```fwd=```): name of the *forward* tagged primer found in the sample sequence
@@ -37,13 +37,13 @@ S2,F515-R,R806-B
 ...
 ```
 A design provides the information about the expected samples and could be represented as a matrix, as follows for the above example:
-| n | F515-A | F515-R | F515-? | F515-X | F515-Y |
-|:---:|:---:|:---:|:---:|:---:|:---:|
-| R806-A |  | R | ... | X |  |
-| R806-B | B | 1 | ... | BX | B |
-| R806-? | ... | ... | ... | ... | ... |
-| R806-X |  | R | ... | X |  |
-| R806-Y | Y | RY | ... | 1 | Y |
+ n | F515-A | F515-R | F515-? | F515-X | F515-Y
+:---:|:---:|:---:|:---:|:---:|:---:
+R806-A | 0 | R | ... | X | 0 
+R806-B | B | 1 | ... | BX | B 
+R806-? | ... | ... | ... | ... | ...
+R806-X | 0 | R | ... | X | 0 
+R806-Y | Y | RY | ... | 1 | Y
 with the possible expected samples being labeled by a "1" while the resulting unexpected samples are labeled by the letter of one or the other tagged primer they have in common with the expected sample. These unexpected sample contain the non-critical mistag sequences. It is based on the distribution of each sequence in these unexpected samples ("orthogonal samples") that the filter computes the modified Thompson Tau test rejection region to decide whether a sequence in an expected sample is also a mistag and should be removed.
 
 ## Reading and citing
