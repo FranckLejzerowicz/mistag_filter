@@ -1,16 +1,16 @@
-# mistag_filter
+## mistag_filter
 
 Metabarcoding sequence abundance filter for projects involving combinations of short tagged primers for the labeling of amplicons and samples multiplexing.
 
 The script necessitates at least a specific **fasta file** and an experimental **design file** inputs.
 
-# fasta file
+## fasta file
 Should contain a copy of each unique sequence for each sample. The header sequence descriptions must include at least three semi-colon separated fields starting with:
 * ```size=```: number of sequence read copies (integer)
 * ```for=``` (or ```fwd=```): name of the *forward* tagged primer found in the sample sequence
 * ```rev=``` (or ```rv=```): name of the *reverse* tagged primer found in the sample sequence
 
-Example:
+# Example:
 ```
 >unique_sequence_1;size=1000;for=F515-X;rev=R806-Y
 ATTGCGGATTATTCGGGAGGGCGGCGAGAGCGTATATTCTAGGCGGATTCTGAC
@@ -23,13 +23,13 @@ The sequences in the fasta must be labelled with both a forward tagged primer an
 
 **Note**: the primer sequences are not necessary, as a demultiplexing tool must have been used that is able to keep the count of the non-critical mistags (e.g. the sequences labeled with forward/reverse tagged primers combinations corresponding to unexpected samples absent from the experimental design).
 
-# design file
+## design file
 Should be a table containing the tags-to-samples information with samples as rows and at least three columns named in the header as follows:
 * ```sample```: unique sample name
 * ```for```: forward tagged primer used to PCR-amplify the sequences of the sample
 * ```rev```: reverse tagged primer used to PCR-amplify the sequences of the sample
 
-Example:
+# Example:
 ```
 sample,for,rev
 S1,F515-X;R806-Y
@@ -37,7 +37,7 @@ S2,F515-R,R806-B
 ...
 ```
 A design provides the information about the expected samples and could be represented as a matrix, as follows for the above example:
-|  | F515-A | F515-R | F515-? | F515-X | F515-Y |
+| n | F515-A | F515-R | F515-? | F515-X | F515-Y |
 |:---:|:---:|:---:|:---:|:---:|:---:|
 | R806-A |  | R | ... | X |  |
 | R806-B | B | 1 | ... | BX | B |
