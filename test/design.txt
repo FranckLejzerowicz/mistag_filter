@@ -1,0 +1,14 @@
+sample,for,rev
+A,F1-A,15-A
+B,F1-A,15-B
+C,F1-A,15-F
+D,F1-B,15-C
+E,F1-B,15-F
+F,F1-C,15-F
+G,F1-D,15-F
+H,F1-D,15-D
+I,F1-E,15-E
+J,F1-F,15-G
+K,F1-G,15-E
+L,F1-G,15-F
+M,F1-G,15-G
