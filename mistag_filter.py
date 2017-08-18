@@ -63,8 +63,6 @@ def mistag_filter():
     print outputStats
 
 def make_outputs(expected, nonCritic, ortho_samples, designFilin, fastaFilin, outFasta, outStats, filtered, design, primers):
-    """
-    """
     ost = open(outStats, 'w')
     ost.write('# script: %s\n' % os.path.abspath(sys.argv[0]))
     ost.write('# github: https://github.com/FranckLejzerowicz/mistag_filter\n')
