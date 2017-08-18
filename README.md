@@ -7,8 +7,8 @@ The script necessitates at least a specific **fasta file** and an experimental *
 ## Fasta file
 Should contain a copy of each unique sequence for each sample. The header sequence descriptions must include at least three semi-colon separated fields starting with:
 * ```size=```: number of sequence read copies (integer)
-* ```for=``` (or ```fwd=```): name of the *forward* tagged primer found in the sample sequence
-* ```rev=``` (or ```rv=```): name of the *reverse* tagged primer found in the sample sequence
+* ```for=```: name of the *forward* tagged primer found in the sample sequence
+* ```rev=```: name of the *reverse* tagged primer found in the sample sequence
 
 #### example:
 ```
@@ -17,7 +17,7 @@ ATTGCGGATTATTCGGGAGGGCGGCGAGAGCGTATATTCTAGGCGGATTCTGAC
 >unique_sequence_1;rev=R806-B;size=1;for=F515-R
 ATTGCGGATTATTCGGGAGGGCGGCGAGAGCGTATATTCTAGGCGGATTCTGAC
 ```
-with ```F515``` being the forward amplification primer name and ```F515-X``` and ```F515-R``` being two different tagged version of this primer, and ```R806``` being the reverse amplification primer name and ```R806-Y``` and ```R806-B``` being two different tagged version of this primer.
+with ```F515``` being the forward amplification primer name and ```F515-X``` and ```F515-R``` being two different tagged versions of this primer, and ```R806``` being the reverse amplification primer name and ```R806-Y``` and ```R806-B``` being two different tagged versions of this primer.
 
 The sequences in the fasta must be labelled with both a forward tagged primer and a reverse tagged primer. Hence, this script only works for short primer constructs composed of N-nt long tag sequences appended at the 5'-ends of the primers (N can be any length), as in e.g. Gloor, Gregory B., et al. "Microbiome profiling by illumina sequencing of combinatorial sequence-tagged PCR products." _PloS one_ **5.10** (2010): e15406.
 
