@@ -25,15 +25,13 @@ def mistag_filter():
     parser.add_argument('-d', nargs = 1, required = True, help = 'Multiplexing design file name (required)')
     parser.add_argument('-o', nargs = '?', default = argparse.SUPPRESS, help = "Output fasta file (default = input appended with 'mistagFiltered.fasta')")
     parser.add_argument('-a', nargs = '?', default = 0.05, type = float, metavar='float between 0 and 1, max. 3 decimals', choices = [float(x)/1000 for x in range(1,1001)], help = "Alpha level for finding the Student's T critical value for the modified Thompson Tau rejection region calulation (default = 0.05)")
-    parser.add_argument('-s', nargs = '?', default = ',', help = "Field separator in multiplexing design file (default = ',')")
     parser.add_argument('--out', action = 'store_true', default = False, help = "Leave expected sample sequences out of non-critical mistags distribution for calculations of the rejection region (default = not active)")
     parse=parser.parse_args()
     args=vars(parse)
 
     # parse design and collect all primers
     designFilin = args['d'][0]
-    sep = args['s']
-    design = get_design(designFilin, sep)
+    design = get_design(designFilin)
     primers = get_primers(design)
 
     # parse input fasta and collect the abundance distributions
@@ -52,11 +50,11 @@ def mistag_filter():
     # outputs
     if args.has_key('o'):
         outputFasta = args['o'].split('/')[-1]
-        outputStats = outputStats + '.stats'
+        outputRad = outputFasta.replace('.fasta', '')
     else:
         outputRad = get_output_filename(fastaFilin)
-        outputFasta = outputRad + '.txt'
-        outputStats = outputRad + '.stats'
+        outputFasta = outputRad + '.fasta'
+    outputStats = outputRad + '_stats.tsv'
     make_outputs(expected, nonCritic, ortho_samples, designFilin, fastaFilin, outputFasta, outputStats, filtered, design, primers)
     print 'Outputs:'
     print outputFasta
@@ -316,7 +314,7 @@ def update_dict(pair, expected, nonCritic, seq, n, seqID, primers, f, r, design)
     elif primers['F'].has_key(f) and primers['R'].has_key(r):
         add_key(nonCritic, pair, seq, n, seqID)
 
-def get_design(designFile, sep):
+def get_design(designFile):
     """
     Rarse the deign file and collect the info about which primer combinations are expected
     Returns a dict with each expected primer combination as key (value set to sample name for output)
@@ -324,7 +322,7 @@ def get_design(designFile, sep):
     design = {}
     fields = ['for', 'rev', 'sample']
     for ldx, line in enumerate(open(designFile)):
-        splitLine = line.strip().split(sep)
+        splitLine = line.strip().split('\t')
         # get the design dict
         if ldx:
             if check_fields(fields, info, designFile):
