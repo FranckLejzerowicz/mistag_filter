@@ -59,6 +59,7 @@ def mistag_filter():
     print 'Outputs:'
     print outputFasta
     print outputStats
+    return 0
 
 def make_outputs(expected, nonCritic, ortho_samples, designFilin, fastaFilin, outFasta, outStats, filtered, design, primers):
     ost = open(outStats, 'w')
