@@ -141,7 +141,7 @@ def output_fasta_and_matrices(filtered, design, outFasta, ost, primers):
             for sdx, sequence in enumerate(filtered[1][combi]):
                 seq_1,seqID_1,reads_1 = tuple(sequence)
                 seq_0,seqID_0,reads_0 = tuple(filtered[0][combi][sdx])
-                if typdx == 0:
+                if typdx == 0 and float(reads_1):
                     ofas.write('>%s_%s;size=%s;for=%s;rev=%s\n%s\n' % (seqID_1, sample, reads_1, F, R, seq_1))
         ost.write('>%s\n' % typ)
         ost.write('\t%s\n' % '\t'.join(sorted(primers['F'])))
