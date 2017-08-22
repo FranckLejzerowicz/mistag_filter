@@ -49,7 +49,7 @@ def mistag_filter():
 
     # outputs
     if args.has_key('o'):
-        outputFasta = args['o'].split('/')[-1]
+        outputFasta = args['o']
         outputRad = outputFasta.replace('.fasta', '')
     else:
         outputRad = get_output_filename(fastaFilin)
@@ -57,8 +57,8 @@ def mistag_filter():
     outputStats = outputRad + '_stats.tsv'
     make_outputs(expected, nonCritic, ortho_samples, designFilin, fastaFilin, outputFasta, outputStats, filtered, design, primers)
     print 'Outputs:'
-    print outputFasta
-    print outputStats
+    print os.path.abspath(outputFasta)
+    print os.path.abspath(outputStats)
     return 0
 
 def make_outputs(expected, nonCritic, ortho_samples, designFilin, fastaFilin, outFasta, outStats, filtered, design, primers):
@@ -233,7 +233,7 @@ def get_output_filename(filin):
     """
     Return automatic output file name based on input file name
     """
-    filinStrip = filin.split('/')[-1].rstrip('txt')
+    filinStrip = filin.rstrip('txt')
     if filin == filinStrip:
         return '%smistagFiltered' % filin
     else:
