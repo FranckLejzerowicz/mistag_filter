@@ -9,6 +9,7 @@ from math import sqrt
 from scipy import stats
 from numpy import array, std, mean
 from multiprocessing import Process, Manager, cpu_count, current_process
+import cProfile
 
 __author__ = "Franck Lejzerowicz"
 __copyright__ = "Copyright 2017, The Deep-Sea Microbiome Project"
@@ -87,7 +88,8 @@ def get_mistags_unexpected(mistags, primers_rad):
                 idx = 0
     return d, D
 
-def make_outputs(expected, nonCritic, ortho_samples, designFilin, fastaFilin, outFasta, outStats, filtered, design, primers):
+
+def make_outputs(expected, nonCritic, ortho_samples, designFilin, fastaFilin, outFasta, outStats, filtered, design, primers, stats_merging):
     ost = open(outStats, 'w')
     ost.write('# script: %s\n' % os.path.abspath(sys.argv[0]))
     ost.write('# github: https://github.com/FranckLejzerowicz/mistag_filter\n')
@@ -108,7 +110,7 @@ def make_outputs(expected, nonCritic, ortho_samples, designFilin, fastaFilin, ou
     # non-critical data
     total_unexpect_reads = sum([sum([float(val[0]) for val in nonCritic[unexp].values()]) for unexp in nonCritic])
     kept_removed = output_fasta_and_matrices(filtered, design, outFasta, ost, primers)
-    output_filtering_results(filtered, kept_removed, design, ost, total_expect_reads, total_unexpect_reads, reads0, reads1)
+    output_filtering_results(filtered, kept_removed, design, ost, total_expect_reads, total_unexpect_reads, reads0, reads1, stats_merging)
     output_nonCritical_data(expected, nonCritic, ortho_samples, primers, design, ost, total_expect_reads, total_unexpect_reads)
     ost.close()
 
@@ -141,20 +143,33 @@ def output_nonCritical_data(expected, nonCritic, ortho_samples, primers, design,
                                   min(non_critics_reads_per_ISU),
                                   max(non_critics_reads_per_ISU)))
 
-def output_filtering_results(filtered, kept_removed, design, ost, total_expect_reads, total_unexpect_reads, reads0, reads1):
+def output_filtering_results(filtered, kept_removed, design, ost, total_expect_reads, total_unexpect_reads, reads0, reads1, stats_merging):
     ost.write('# Filtering\n')
     ost.write('>Total reads in expected samples:\t%s\t%s %% (of all %s reads)\n' % (total_expect_reads, round((total_expect_reads/(total_expect_reads+total_unexpect_reads))*100, 2), total_expect_reads+total_unexpect_reads))
     ost.write('>Kept reads in expected samples:\t%s\t%s %%\n' % (reads1, round((reads1/total_expect_reads)*100, 2)))
     ost.write('>Removed reads from expected samples:\t%s\t%s %%\n' % (reads0, round((reads0/total_expect_reads)*100, 2)))
     ost.write('>Column output for expected samples\n')
-    ost.write('Forward\tReverse\tSample\tRemoved reads\tRemoved ISUs\tPass-filter reads\tPass-filter ISUs\tPass-filter (%)\n')
+    if len(stats_merging):
+        ost.write('Forward\tReverse\tSample\tdtd_demultiplexed_reads\tmerged_reads\tRemoved reads\tRemoved ISUs\tPass-filter reads\tPass-filter ISUs\tPass-filter (%)\n')
+    else:
+        ost.write('Forward\tReverse\tSample\tRemoved reads\tRemoved ISUs\tPass-filter reads\tPass-filter ISUs\tPass-filter (%)\n')
     for combi in sorted(kept_removed):
         pass_in = [x for x in kept_removed[combi][1] if x]
         pass_out = [x for x in kept_removed[combi][0] if x]
-        ost.write('%s\n' % '\t'.join(map(str, [combi[0], combi[1], design[combi],
-                                               sum(pass_out), len(pass_out),
-                                               sum(pass_in), len(pass_in),
-                                               (sum(pass_in)/(sum(pass_in)+sum(pass_out)))*100])))
+        sample = design[combi]
+        fileRad = [x for x in stats_merging.keys() if sample in x][0]
+        if len(stats_merging):
+            ost.write('%s\n' % '\t'.join(map(str, [combi[0], combi[1], sample,
+                                                stats_merging[fileRad][0],
+                                                stats_merging[fileRad][1],
+                                                sum(pass_out), len(pass_out),
+                                                sum(pass_in), len(pass_in),
+                                                (sum(pass_in)/(sum(pass_in)+sum(pass_out)))*100])))
+        else:
+            ost.write('%s\n' % '\t'.join(map(str, [combi[0], combi[1], sample,
+                                                sum(pass_out), len(pass_out),
+                                                sum(pass_in), len(pass_in),
+                                                (sum(pass_in)/(sum(pass_in)+sum(pass_out)))*100])))
 
 def output_fasta_and_matrices(filtered, design, outFasta, ost, primers):
     ofas = open(outFasta, 'w')
@@ -263,15 +278,6 @@ def sample_orthogonals(design, expected, nonCritic):
         ortho[combi] = same_fwd_idx + same_rev_idx
     return ortho
 
-def get_output_filename(filin):
-    """
-    Return automatic output file name based on input file name
-    """
-    filinStrip = filin.rstrip('txt')
-    if filin == filinStrip:
-        return '%smistagFiltered' % filin
-    else:
-        return '%s.mistagFiltered' % filinStrip
 
 def get_primers(design):
     """
@@ -413,6 +419,7 @@ def get_merging_config(soft, folder):
         merging['for'] = ['-f', None]
         merging['rev'] = ['-r', None]
         merging['out'] = ['-w', None]
+        merging['log'] = ['-G', None]
     with open(merging_config_fp) as f:
         for line in f:
             line_split = line.strip().split(',')
@@ -420,7 +427,7 @@ def get_merging_config(soft, folder):
     return merging
 
 
-def run_merging(fastqs, merging_soft, merging_config, return_list):
+def run_merging(fastqs, merging_soft, merging_config, return_dict):
     curProc_name = current_process().name
     cmd = [merging_soft]
     for config_opt, config_val in merging_config.items():
@@ -431,11 +438,12 @@ def run_merging(fastqs, merging_soft, merging_config, return_list):
                 cmd.extend([config_val[0], fastqs[0]])
             if config_opt == 'rev':
                 cmd.extend([config_val[0], fastqs[1]])
+            if config_opt == 'log':
+                cmd.extend([config_val[0], '%s_log.bz2' % os.path.splitext(fastqs[0])[0]])
             if config_opt == 'out':
                 out = '%s.fasta' % '_'.join(fastqs[0].split('_')[:-1])
-                return_list.append(out)
+                return_dict[out] = [curProc_name]
                 cmd.extend([config_val[0], out])
-    print ' '.join(cmd)
     subprocess.call(cmd)
 
 
@@ -449,20 +457,22 @@ def add_seq_combi_keys(derep, seq, combi):
         derep[seq] = {combi: 1}
 
 
-def format_fastas(folder, return_list, samples_fastqs, mistag_unexpected):
+def format_fastas(folder, return_dict, samples_fastqs, mistag_unexpected, stats_counts):
+    ## perform counting HERE!!! no grep
     derep = {}
-    for fasta in return_list:
+    for fasta in return_dict.keys():
         if fasta.endswith('mistag.fasta'):
             combi = 0
         else:
             combi = samples_fastqs[fasta.replace('.fasta', '')][-1]
         seq = ''
+        c = 0
         with open(fasta) as f:
-            print 'fasta:', fasta, combi
             for line in f:
                 if line[0] == '>':
                     if len(seq):
                         if add:
+                            c += 1
                             add_seq_combi_keys(derep, seq, combi)
                         seq = ''
                     add = 1
@@ -475,9 +485,13 @@ def format_fastas(folder, return_list, samples_fastqs, mistag_unexpected):
                 else:
                     seq += line.strip()
             if add:
+                c += 1
                 add_seq_combi_keys(derep, seq, combi)
+            if fasta.endswith('_mistag.fasta') == False:
+                stats_counts[fasta].append(str(c))
     fasta_out = '%s/%s_toMistagFilter.fasta' % (folder, folder)
     o = open(fasta_out, 'w')
+    counter = {}
     for idx, seq_combis in enumerate(derep.items()):
         seq = seq_combis[0]
         combis = seq_combis[1]
@@ -485,6 +499,20 @@ def format_fastas(folder, return_list, samples_fastqs, mistag_unexpected):
             o.write('>seq%s;size=%s;fwd=%s;rev=%s\n%s\n' % (idx, n, combi[0], combi[1], seq))
     o.close()
     return fasta_out
+
+
+def get_merging_stats(return_dict, folder, stats_counts):
+    with open(return_dict.keys()[0]) as f:
+        for line in f:
+            grep_key = '\:'.join(line[1:].split(':')[:3])
+            break
+    cmd = 'grep -cR "%s" %s/*_fwd.fastq' % (grep_key, folder)
+    p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    out, err = p.communicate()
+    for fastq in out.strip().split('\n'):
+        f = fastq.split(':')[0]
+        n = fastq.split(':')[1]
+        stats_counts['%s.fasta' % f.split('_fwd.fastq')[0]] = [n]
 
 
 if __name__ == '__main__':
@@ -495,8 +523,9 @@ if __name__ == '__main__':
     primers = get_primers(design)
     primers_rad = dict([x, y.keys()[0].split('-')[0]] for x,y in primers.items())
 
+    stats_counts = {}
     fastaFilin = args['i'][0]
-    # perform formatting
+    # perform formatting - may include reads merging step
     if os.path.isdir(fastaFilin):
         fastaFilin = fastaFilin.rstrip('/')
         samples_fastqs, mistags = get_inputs_to_format(fastaFilin, design, primers_rad)
@@ -504,19 +533,20 @@ if __name__ == '__main__':
         mistag_unexpected = mistags[1]
         jobs_merging = []
         manager = Manager()
-        return_list = manager.list()
+        return_dict = manager.dict()
         merging_soft = args['m']
         merging_config = get_merging_config(merging_soft, fastaFilin)
         for sample_fastq, sample_fastqs in samples_fastqs.items():
-            p = Process(target = run_merging, args = (sample_fastqs, merging_soft, merging_config, return_list,), name = 'merging_%s' % sample_fastq.split('/')[-1])
+            p = Process(target = run_merging, args = (sample_fastqs, merging_soft, merging_config, return_dict,), name = 'merging_%s' % sample_fastq.split('/')[-1])
             jobs_merging.append(p)
             p.start()
-        p = Process(target = run_merging, args = (mistag_files, merging_soft, merging_config, return_list,), name = 'merging_mistags')
+        p = Process(target = run_merging, args = (mistag_files, merging_soft, merging_config, return_dict,), name = 'merging_mistags')
         jobs_merging.append(p)
         p.start()
         for job_merging in jobs_merging:
             job_merging.join()
-        fastaFilin = format_fastas(fastaFilin, return_list, samples_fastqs, mistag_unexpected)
+        get_merging_stats(return_dict, fastaFilin, stats_counts)
+        fastaFilin = format_fastas(fastaFilin, return_dict, samples_fastqs, mistag_unexpected, stats_counts)
 
     # parse input fasta and collect the abundance distributions
     #   - for sequences in expected samples
@@ -534,12 +564,12 @@ if __name__ == '__main__':
     # outputs
     if args.has_key('o'):
         outputFasta = args['o']
-        outputRad = outputFasta.replace('.fasta', '')
+        outputRad = os.path.splitext(outputFasta)[0]
     else:
-        outputRad = get_output_filename(fastaFilin)
+        outputRad = '%s_mistagFilt' % os.path.splitext(fastaFilin)[0]
         outputFasta = outputRad + '.fasta'
     outputStats = outputRad + '_stats.tsv'
-    make_outputs(expected, nonCritic, ortho_samples, designFilin, fastaFilin, outputFasta, outputStats, filtered, design, primers)
+    make_outputs(expected, nonCritic, ortho_samples, designFilin, fastaFilin, outputFasta, outputStats, filtered, design, primers, stats_counts)
     print 'Outputs:'
     print os.path.abspath(outputFasta)
     print os.path.abspath(outputStats)
