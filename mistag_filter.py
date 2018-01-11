@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import glob
 import re, time
 import os, sys
 import argparse
@@ -7,6 +8,7 @@ import subprocess
 from math import sqrt
 from scipy import stats
 from numpy import array, std, mean
+from multiprocessing import Process, Manager, cpu_count, current_process
 
 __author__ = "Franck Lejzerowicz"
 __copyright__ = "Copyright 2017, The Deep-Sea Microbiome Project"
@@ -16,50 +18,74 @@ __version__ = "1.0"
 __maintainer__ = "Franck Lejzerowicz"
 __email__ = "franck.lejzerowicz@unige.ch"
 
-def mistag_filter():
+
+def get_args():
     """
     Filter the critical mistags as in Esling et al. 2015 (NAR, https://doi.org/10.1093/nar/gkv107)
     """
     parser=argparse.ArgumentParser()
-    parser.add_argument('-i', nargs = 1, required = True, help = 'Input fasta file name (required)')
+    parser.add_argument('-i', nargs = 1, required = True, help = 'Input fasta file name [or folder if pre-formatting needed] (required)')
     parser.add_argument('-d', nargs = 1, required = True, help = 'Multiplexing design file name (required)')
     parser.add_argument('-o', nargs = '?', default = argparse.SUPPRESS, help = "Output fasta file (default = input appended with 'mistagFiltered.fasta')")
     parser.add_argument('-a', nargs = '?', default = 0.05, type = float, metavar='float between 0 and 1, max. 3 decimals', choices = [float(x)/1000 for x in range(1,1001)], help = "Alpha level for finding the Student's T critical value for the modified Thompson Tau rejection region calulation (default = 0.05)")
     parser.add_argument('--out', action = 'store_true', default = False, help = "Leave expected sample sequences out of non-critical mistags distribution for calculations of the rejection region (default = not active)")
+    parser.add_argument('-m', nargs = '?', choices = ['pandaseq', 'vsearch'], default = 'pandaseq', help = 'Reads merging software - which must be installed and running (default = pandaseq)')
     parse=parser.parse_args()
     args=vars(parse)
+    return args
 
-    # parse design and collect all primers
-    designFilin = args['d'][0]
-    design = get_design(designFilin)
-    primers = get_primers(design)
 
-    # parse input fasta and collect the abundance distributions
-    fastaFilin = args['i'][0]
-    #   - for sequences in expected samples
-    #   - for sequences in unexpected samples (non-critical mistags)
-    expected, nonCritic = parse_input(fastaFilin, design, primers)
-    # unexpected samples sharing one tagged primer with each expected sample
-    ortho_samples = sample_orthogonals(design, expected, nonCritic)
+def rev_dict(d):
+    D = {}
+    for k,v in d.items():
+        D[v] = k
+    return D
 
-    # mistag filter main
-    alpha_level = args['a']
-    notIn = args['out']
-    filtered = filter_mistags(expected, nonCritic, ortho_samples, alpha_level, notIn)
 
-    # outputs
-    if args.has_key('o'):
-        outputFasta = args['o']
-        outputRad = outputFasta.replace('.fasta', '')
-    else:
-        outputRad = get_output_filename(fastaFilin)
-        outputFasta = outputRad + '.fasta'
-    outputStats = outputRad + '_stats.tsv'
-    make_outputs(expected, nonCritic, ortho_samples, designFilin, fastaFilin, outputFasta, outputStats, filtered, design, primers)
-    print 'Outputs:'
-    print os.path.abspath(outputFasta)
-    print os.path.abspath(outputStats)
-    return 0
+def get_inputs_to_format(fastaFolder, design, primers_rad):
+    design_rev = rev_dict(design)
+    files = {}
+    folderFiles =  glob.glob('%s/*fastq' % fastaFolder)
+    for f in folderFiles:
+        fsplit = f.split('_')
+        if fsplit[-1] in ['rev.fastq', 'fwd.fastq']:
+            files.setdefault('_'.join(fsplit[:-1]), []).append(f)
+    for f in files:
+        for s in design_rev:
+            if s in f:
+                files[f].append(design_rev[s])
+                break
+    mistag_files = [x for x in folderFiles if re.search(r'_mistag_R[1-2]\.fastq$', x)]
+    if len(mistag_files) == 2:
+        mistag_IDs, mistag_all = get_mistags_unexpected(mistag_files, primers_rad)
+    return files, [mistag_files, mistag_IDs, mistag_all]
+
+
+def get_mistags_unexpected(mistags, primers_rad):
+    d = {}
+    D = {'weird': {}, 'unexpected': {}}
+    with open(mistags[0]) as f1, open(mistags[1]) as f2:
+        idx = 0
+        for id1, id2 in zip(f1, f2):
+            idx += 1
+            if idx == 1:
+                t1 = id1.strip().split(';tag:')[-1]
+                t2 = id2.strip().split(';tag:')[-1]
+                combi = tuple([t1,t2])
+                if 'unknown' in combi:
+                    continue
+                typ = 'weird'
+                if t1.split('-')[0] != t2.split('-')[0]:
+                    combi = tuple([[x for x in combi if x.split('-')[0] == primers_rad['F']][0], [x for x in combi if x.split('-')[0] == primers_rad['R']][0]])
+                    d[id1.split()[0][1:]] = combi
+                    typ = 'unexpected'
+                if D[typ].has_key(combi):
+                    D[typ][combi] += 1
+                else:
+                    D[typ][combi] = 1
+            if idx == 4:
+                idx = 0
+    return d, D
 
 def make_outputs(expected, nonCritic, ortho_samples, designFilin, fastaFilin, outFasta, outStats, filtered, design, primers):
     ost = open(outStats, 'w')
@@ -184,8 +210,11 @@ def filter_mistags(expected, nonCritic, ortho_samples, alpha_level, notIn):
     Returns the dict with kept (key "1") or removed (key "0") ISU lists for each sample (nested key)
     """
     filt = {0: {}, 1: {}}
+    # for each sample
     for sample in expected:
+        # get the orthogonal samples from which to compute the abundance distributions
         curOrtho_samples = ortho_samples[sample]
+        # for each ISU in the expected samples
         for ISU in expected[sample]:
             isuName = str(expected[sample][ISU][1])
             curAbund = int(expected[sample][ISU][0])
@@ -194,25 +223,30 @@ def filter_mistags(expected, nonCritic, ortho_samples, alpha_level, notIn):
                 totalAbund = orthoAbunds
             else:
                 totalAbund = [curAbund] + orthoAbunds
-            # get the properties of the distribution
+            # get the number of abundances in the distribution
+            n = len(totalAbund)
+            # keep the ISU if only one abundance value (i.e. may be rare but not a cross-conta)
+            if n <= 1:
+                filt[1].setdefault(sample,[]).append((ISU, isuName, curAbund))
+                filt[0].setdefault(sample,[]).append((ISU, isuName, 0))
+                continue
+            # get distribution paramters
             meanAbund = mean(totalAbund)
             devAbund = std(totalAbund)
-            n = len(totalAbund)
-            if n == 1:
-                filt[1].setdefault(sample,[]).append(ISU)
-                continue
             df = (n-1)
             curDev = abs(meanAbund - curAbund)
             # get the critical student's t-test value
             tAlpha = stats.t.isf(alpha_level, df)
             # rejection region
             r = ((tAlpha*(n-1))/(sqrt(n)*sqrt(n-1+(tAlpha**2))))*devAbund
+            # remove ISU if its abundance is in the rejection region
             if curDev <= r:
-                filt[1].setdefault(sample,[]).append((ISU, isuName, 0))
-                filt[0].setdefault(sample,[]).append((ISU, isuName, curAbund))
+                filt[1].setdefault(sample,[]).append((ISU, isuName, 0))         # keep 0 reads of the current ISU
+                filt[0].setdefault(sample,[]).append((ISU, isuName, curAbund))  # remove the current abundance of the current ISU
+            # keep ISU if its abundance is in the rejection region
             else:
-                filt[1].setdefault(sample,[]).append((ISU, isuName, curAbund))
-                filt[0].setdefault(sample,[]).append((ISU, isuName, 0))
+                filt[1].setdefault(sample,[]).append((ISU, isuName, curAbund))  # keep the current abundance of the current ISU
+                filt[0].setdefault(sample,[]).append((ISU, isuName, 0))         # remove 0 reads of the current ISU
     return filt
 
 def sample_orthogonals(design, expected, nonCritic):
@@ -244,25 +278,11 @@ def get_primers(design):
     Get all the forward and all the reverse primer name in a dict
     """
     primers = {}
-    for frx, FR in enumerate(['F','R']):
+    for frx, FR in enumerate(['F', 'R']):
         primers[FR] = {}
         for primer in list(set([x[frx] for x in design.keys()])):
             primers[FR][primer] = 1
     return primers
-
-def add_key(d, pair, seq, n, seqID):
-    """
-    Fill a nested dict with given info
-    Here for registering the sequences that are associated with an expected primer combinations, and with non-critical combinations
-    """
-    if d.has_key(pair):
-        if d[pair].has_key(seq):
-            print 'Error: sequence "%s" already encountered (with size=%s) for the current primer combination "%s" (now with size=%s)\nExiting' % (seq, d[pair][seq][0], ' + '.join(pair), n)
-            sys.exit()
-        else:
-            d[pair][seq] = [n, seqID]
-    else:
-        d[pair] = {seq: [n, seqID]}
 
 def parse_input(fastaFilin, design, primers):
     """
@@ -276,7 +296,6 @@ def parse_input(fastaFilin, design, primers):
     """
     expected = {}
     nonCritic = {}
-    start = 0
     curSeq = {}
     seq = ''
     for lindx,line in enumerate(open(fastaFilin, 'rU')):
@@ -289,7 +308,6 @@ def parse_input(fastaFilin, design, primers):
                 update_dict(pair, expected, nonCritic, seq, n, seqID, primers, f, r, design)
                 curSeq = {}
                 seq = ''
-                start = 1
             splitID = line.strip()[1:].split(';')
             seqID = splitID[0]
             for field in splitID[1:]:
@@ -303,7 +321,6 @@ def parse_input(fastaFilin, design, primers):
         else:
             seq += line.strip()
     update_dict(pair, expected, nonCritic, seq, n, seqID, primers, f, r, design)
-    print
     return expected, nonCritic
 
 def update_dict(pair, expected, nonCritic, seq, n, seqID, primers, f, r, design):
@@ -315,20 +332,36 @@ def update_dict(pair, expected, nonCritic, seq, n, seqID, primers, f, r, design)
     elif primers['F'].has_key(f) and primers['R'].has_key(r):
         add_key(nonCritic, pair, seq, n, seqID)
 
+def add_key(d, pair, seq, n, seqID):
+    """
+    Fill a nested dict with given info
+    Register sequences associated with:
+        - expected primer combinations (first call in update_dict)
+        - non-critical combinations (second call in update_dict)
+    """
+    if d.has_key(pair):
+        if d[pair].has_key(seq):
+            print 'Error: sequence "%s" already encountered (with size=%s) for the current primer combination "%s" (now with size=%s)\nExiting' % (seq, d[pair][seq][0], ' + '.join(pair), n)
+            sys.exit()
+        else:
+            d[pair][seq] = [n, seqID]
+    else:
+        d[pair] = {seq: [n, seqID]}
+
 def get_design(designFile):
     """
-    Rarse the deign file and collect the info about which primer combinations are expected
+    Rarse the design file and collect the info about which primer combinations are expected
     Returns a dict with each expected primer combination as key (value set to sample name for output)
     """
     design = {}
-    fields = ['for', 'rev', 'sample']
+    fields = ['run', 'forward', 'reverse', 'sample']
     for ldx, line in enumerate(open(designFile)):
-        splitLine = line.strip().split('\t')
+        splitLine = line.strip().split(',')
         # get the design dict
         if ldx:
             if check_fields(fields, info, designFile):
-                f,r,s = tuple([splitLine[info[x]] for x in fields])
-                design[tuple([f,r])] = s
+                r,F,R,s = tuple([splitLine[info[x]] for x in fields])
+                design[tuple([F,R])] = s
         # get the headers indices
         else:
             info = {}
@@ -349,4 +382,164 @@ def check_fields(fields, info, filin):
         return 1
 
 
-mistag_filter()
+
+def get_merging_config(soft, folder):
+    merging_config_fp = '%s/merging_%s.conf' % (folder, soft)
+    merging = {}
+    if os.path.isfile(merging_config_fp) == False:
+        o=open(merging_config_fp, 'w')
+        if soft == 'vsearch':
+            o.write('min_qual,--fastq_qmin,0\n')
+            o.write('max_qual,--fastq_qmax,41\n')
+            o.write('min_overlap,--fastq_minovlen,15\n')
+            o.write('max_diffs,--fastq_maxdiffs,5\n')
+            o.write('min_size,--fastq_minmergelen,1\n')
+            o.write('max_size,--fastq_maxmergelen,1000\n')
+            o.write('threads,--threads,%s\n' % cpu_count())
+        elif soft == 'pandaseq':
+            o.write('thresh,-t,0.6\n')
+            o.write('algo,-A,pear\n')
+            o.write('threads,-T,%s\n' % cpu_count())
+            o.write('min_len,-l,\n')
+            o.write('max_len,-L,\n')
+            o.write('min_overap,-o,30\n')
+            o.write('comment,-d,bfsrk\n')
+        o.close()
+    if soft == 'vsearch':
+        merging['for'] = ['--fastq_mergepairs', None]
+        merging['rev'] = ['--reverse', None]
+        merging['out'] = ['--fastaout', None]
+    elif soft == 'pandaseq':
+        merging['for'] = ['-f', None]
+        merging['rev'] = ['-r', None]
+        merging['out'] = ['-w', None]
+    with open(merging_config_fp) as f:
+        for line in f:
+            line_split = line.strip().split(',')
+            merging[line_split[0]] = line_split[1:]
+    return merging
+
+
+def run_merging(fastqs, merging_soft, merging_config, return_list):
+    curProc_name = current_process().name
+    cmd = [merging_soft]
+    for config_opt, config_val in merging_config.items():
+        if config_val[-1]:
+            cmd.extend(config_val)
+        else:
+            if config_opt == 'for':
+                cmd.extend([config_val[0], fastqs[0]])
+            if config_opt == 'rev':
+                cmd.extend([config_val[0], fastqs[1]])
+            if config_opt == 'out':
+                out = '%s.fasta' % '_'.join(fastqs[0].split('_')[:-1])
+                return_list.append(out)
+                cmd.extend([config_val[0], out])
+    print ' '.join(cmd)
+    subprocess.call(cmd)
+
+
+def add_seq_combi_keys(derep, seq, combi):
+    if derep.has_key(seq):
+        if derep[seq].has_key(combi):
+            derep[seq][combi] += 1
+        else:
+            derep[seq][combi] = 1
+    else:
+        derep[seq] = {combi: 1}
+
+
+def format_fastas(folder, return_list, samples_fastqs, mistag_unexpected):
+    derep = {}
+    for fasta in return_list:
+        if fasta.endswith('mistag.fasta'):
+            combi = 0
+        else:
+            combi = samples_fastqs[fasta.replace('.fasta', '')][-1]
+        seq = ''
+        with open(fasta) as f:
+            print 'fasta:', fasta, combi
+            for line in f:
+                if line[0] == '>':
+                    if len(seq):
+                        if add:
+                            add_seq_combi_keys(derep, seq, combi)
+                        seq = ''
+                    add = 1
+                    if fasta.endswith('_mistag.fasta'):
+                        ID = ':'.join(line[1:].split(':')[:7])
+                        if mistag_unexpected.has_key(ID):
+                            combi = mistag_unexpected[ID]
+                        else:
+                            add = 0
+                else:
+                    seq += line.strip()
+            if add:
+                add_seq_combi_keys(derep, seq, combi)
+    fasta_out = '%s/%s_toMistagFilter.fasta' % (folder, folder)
+    o = open(fasta_out, 'w')
+    for idx, seq_combis in enumerate(derep.items()):
+        seq = seq_combis[0]
+        combis = seq_combis[1]
+        for combi, n in combis.items():
+            o.write('>seq%s;size=%s;fwd=%s;rev=%s\n%s\n' % (idx, n, combi[0], combi[1], seq))
+    o.close()
+    return fasta_out
+
+
+if __name__ == '__main__':
+    args = get_args()
+    # parse design and collect all primers
+    designFilin = args['d'][0]
+    design = get_design(designFilin)
+    primers = get_primers(design)
+    primers_rad = dict([x, y.keys()[0].split('-')[0]] for x,y in primers.items())
+
+    fastaFilin = args['i'][0]
+    # perform formatting
+    if os.path.isdir(fastaFilin):
+        fastaFilin = fastaFilin.rstrip('/')
+        samples_fastqs, mistags = get_inputs_to_format(fastaFilin, design, primers_rad)
+        mistag_files = mistags[0]
+        mistag_unexpected = mistags[1]
+        jobs_merging = []
+        manager = Manager()
+        return_list = manager.list()
+        merging_soft = args['m']
+        merging_config = get_merging_config(merging_soft, fastaFilin)
+        for sample_fastq, sample_fastqs in samples_fastqs.items():
+            p = Process(target = run_merging, args = (sample_fastqs, merging_soft, merging_config, return_list,), name = 'merging_%s' % sample_fastq.split('/')[-1])
+            jobs_merging.append(p)
+            p.start()
+        p = Process(target = run_merging, args = (mistag_files, merging_soft, merging_config, return_list,), name = 'merging_mistags')
+        jobs_merging.append(p)
+        p.start()
+        for job_merging in jobs_merging:
+            job_merging.join()
+        fastaFilin = format_fastas(fastaFilin, return_list, samples_fastqs, mistag_unexpected)
+
+    # parse input fasta and collect the abundance distributions
+    #   - for sequences in expected samples
+    #   - for sequences in unexpected samples (non-critical mistags)
+    expected, nonCritic = parse_input(fastaFilin, design, primers)
+
+    # unexpected samples sharing one tagged primer with each expected sample
+    ortho_samples = sample_orthogonals(design, expected, nonCritic)
+
+    # mistag filter main
+    alpha_level = args['a']
+    notIn = args['out']
+    filtered = filter_mistags(expected, nonCritic, ortho_samples, alpha_level, notIn)
+
+    # outputs
+    if args.has_key('o'):
+        outputFasta = args['o']
+        outputRad = outputFasta.replace('.fasta', '')
+    else:
+        outputRad = get_output_filename(fastaFilin)
+        outputFasta = outputRad + '.fasta'
+    outputStats = outputRad + '_stats.tsv'
+    make_outputs(expected, nonCritic, ortho_samples, designFilin, fastaFilin, outputFasta, outputStats, filtered, design, primers)
+    print 'Outputs:'
+    print os.path.abspath(outputFasta)
+    print os.path.abspath(outputStats)
