@@ -489,7 +489,7 @@ def format_fastas(folder, return_dict, samples_fastqs, mistag_unexpected, stats_
                 add_seq_combi_keys(derep, seq, combi)
             if fasta.endswith('_mistag.fasta') == False:
                 stats_counts[fasta].append(str(c))
-    fasta_out = '%s/%s_toMistagFilter.fasta' % (folder, folder)
+    fasta_out = '%s/%s_toMistagFilter.fasta' % (folder, folder.split('/')[-1])
     o = open(fasta_out, 'w')
     counter = {}
     for idx, seq_combis in enumerate(derep.items()):
