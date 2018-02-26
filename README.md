@@ -1,4 +1,4 @@
-# mistag_filter
+# mistagging filter
 
 Metabarcoding sequence abundance filter for projects involving combinations of short tagged primers for the labeling of amplicons and samples multiplexing.
 
@@ -59,7 +59,7 @@ Tagging amplicons with tag sequences appended to PCR primers allow the multiplex
 ## Usage
 
 ```
-mistag_filter.py [-h] -i I -d D [-o [O]] [-sep [SEP]] [-a [float between 0 and 1, max. 3 decimals]] [--out]
+mistagging.py [-h] -i I -d D [-o [O]] [-sep [SEP]] [-a [float between 0 and 1, max. 3 decimals]] [--out]
 ```
 
 ### Optional arguments
