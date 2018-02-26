@@ -86,15 +86,17 @@ def get_merging_stats(return_dict, folder, stats_merging):
             break
     # grep this each-sequence-entry identifier in each demultiplexed fastq
     cmd = 'grep -cR "%s" %s/*_fwd.fastq' % (grep_key, folder)
-    try:
-        p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, encoding='utf8')
-    except TypeError:
-        p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
+#    try:
+#        p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, encoding='utf8')
+#    except TypeError:
+#        p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
+    p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
     p.wait()
     # get for each sample the number of sequences submitted to merging
     for fastq_grep in p.stdout:
-        f = str(fastq_grep).strip().split(':')[0]
-        n = str(fastq_grep).strip().split(':')[1]
+        fastq_grep_decode = fastq_grep.decode('utf8').strip()
+        f = str(fastq_grep_decode).strip().split(':')[0]
+        n = str(fastq_grep_decode).strip().split(':')[1]
         file_key = os.path.abspath('%s.fasta' % f.split('_fwd.fastq')[0])
         stats_merging[file_key] = [n]
 
