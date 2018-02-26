@@ -174,22 +174,34 @@ def write_designs(ost, design, primers, tab, nCr, basic_stats):
                 matData = []
                 for f in Fs:
                     if (f,r) in design:
-                        nKept = tab_sums.loc['kept', '%s__%s' % (f,r)]
-                        NKept = tab_counts.loc['kept', '%s__%s' % (f,r)]
-                        nRemoved = tab_sums.loc['removed', '%s__%s' % (f,r)]
-                        NRemoved = tab_counts.loc['removed', '%s__%s' % (f,r)]
+                        k = ('kept', '%s__%s' % (f,r))
+                        rm = ('removed', '%s__%s' % (f,r))
+                        nKept = fecth_df_info(tab_sums, k)
+                        NKept = fecth_df_info(tab_count, k)
+                        nRemoved = fecth_df_info(tab_sums, rm)
+                        NRemoved = fecth_df_info(tab_count, rm)
                         nTotal = float(nKept + nRemoved)
-                        pKept = round(float(nKept/nTotal)*100, 2)
+                        if nTotal:
+                            pKept = round(float(nKept/nTotal)*100, 2)
+                            PKept = round(float(NKept/(NKept+NRemoved))*100, 2)
+                        else:
+                            pKept = 0.00
+                            PKept = 0.00
                         matData.append(pKept)
                         d[(f,r)] = [design[(f,r)], nTotal,
                                     nRemoved, NRemoved,
-                                    nKept, NKept,
-                                    round(float(nKept/(nKept + nRemoved))*100, 2),
-                                    round(float(NKept/(NKept + NRemoved))*100, 2)]
+                                    nKept, NKept, pKept, PKept]
                     else:
                         matData.append('')
             ost.write('%s\t%s\n' % (r, '\t'.join(map(str, matData))))
     return d
+
+
+def fecth_df_info(tab, k):
+    if k in list(tab.index.values):
+        return tab.loc[k]
+    else:
+        return 0
 
 
 def write_filtering(ost, tab, stats_merging, basic_stats, exp_d):
