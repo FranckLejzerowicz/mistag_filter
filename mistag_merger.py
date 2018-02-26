@@ -1,6 +1,6 @@
 import os
 import subprocess
-from multiprocessing import Process, Manager, current_process
+from multiprocessing import Process, Manager, current_process, cpu_count
 
 from mistag_writer import write_fastas, write_merging_cmd
 from mistag_utils import increment_nested
@@ -70,7 +70,7 @@ def run_merging(folder, fastqs, merging_soft, merging_config, return_dict,
     write_merging_cmd(merging_cmd_fp, cmd)
 
 
-def get_merging_stats(return_dict, folder, stats_counts):
+def get_merging_stats(return_dict, folder, stats_merging):
     """Collect the number of reads in each the fastqs
     sequences submitted to the merging process
     """
@@ -92,10 +92,11 @@ def get_merging_stats(return_dict, folder, stats_counts):
     for fastq_grep in p.stdout:
         f = str(fastq_grep).strip().split(':')[0]
         n = str(fastq_grep).strip().split(':')[1]
-        stats_counts['%s.fasta' % f.split('_fwd.fastq')[0]] = [n]
+        file_key = os.path.abspath('%s.fasta' % f.split('_fwd.fastq')[0])
+        stats_merging[file_key] = [n]
 
 
-def get_derep(return_dict, samples_fastqs, mistag_unexpected, stats_counts):
+def get_derep(return_dict, samples_fastqs, mistag_unexpected, stats_merging):
     derep = {}
     # for each fasta file outputed by the merging algorithm
     for fasta in return_dict.keys():
@@ -138,12 +139,13 @@ def get_derep(return_dict, samples_fastqs, mistag_unexpected, stats_counts):
                 increment_nested(derep, seq, combi)
             # update stats_count if the fasta file contain the merged mistags
             if fasta.endswith('_mistag.fasta') == False:
-                stats_counts[fasta].append(str(c))
+                file_key = os.path.abspath(fasta)
+                stats_merging[file_key].append(str(c))
     return derep
 
 
 def perform_merging(args, fastin, samples_fastqs, mistag_fastqs,
-                    stats_counts, mistag_unexpected, multiproc):
+                    stats_merging, mistag_unexpected, multiproc):
     merging_soft = args['m']
     merging_config, merging_cmd_fp = get_merging_config(merging_soft, fastin)
     if multiproc:
@@ -178,9 +180,9 @@ def perform_merging(args, fastin, samples_fastqs, mistag_fastqs,
     run_merging(fastin, mistag_fastqs, merging_soft, merging_config,
                 return_dict, merging_cmd_fp)
     print('All mergings complete!')
-    get_merging_stats(return_dict, fastin, stats_counts)
+    get_merging_stats(return_dict, fastin, stats_merging)
     derep = get_derep(return_dict, samples_fastqs, mistag_unexpected,
-                      stats_counts)
-    fastout = write_fastas(fastin, derep, stats_counts)
+                      stats_merging)
+    fastout = write_fastas(fastin, derep, stats_merging)
     return fastout
 
