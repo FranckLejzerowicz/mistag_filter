@@ -177,13 +177,13 @@ def write_designs(ost, design, primers, tab, nCr, basic_stats):
                         k = ('kept', '%s__%s' % (f,r))
                         rm = ('removed', '%s__%s' % (f,r))
                         nKept = fecth_df_info(tab_sums, k)
-                        NKept = fecth_df_info(tab_count, k)
+                        NKept = fecth_df_info(tab_counts, k)
                         nRemoved = fecth_df_info(tab_sums, rm)
-                        NRemoved = fecth_df_info(tab_count, rm)
+                        NRemoved = fecth_df_info(tab_counts, rm)
                         nTotal = float(nKept + nRemoved)
                         if nTotal:
-                            pKept = round(float(nKept/nTotal)*100, 2)
-                            PKept = round(float(NKept/(NKept+NRemoved))*100, 2)
+                            pKept = round((nKept/nTotal)*100, 2)
+                            PKept = round((NKept/float(NKept+NRemoved))*100, 2)
                         else:
                             pKept = 0.00
                             PKept = 0.00
