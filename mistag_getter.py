@@ -51,11 +51,11 @@ def get_fastqs(fastin, design):
     print()
     print()
     print(design_rev)
+    # add the sample name for each fwd/rev fastqs list
+    add_to_dict_list(samples_fastqs, design_rev)
     print()
     print()
     print(samples_fastqs)
-    # add the sample name for each fwd/rev fastqs list
-    add_to_dict_list(samples_fastqs, design_rev)
 
     combi_fastqs = {}
     for _, (fwd, rev, cmb) in samples_fastqs.items():
