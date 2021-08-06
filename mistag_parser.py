@@ -49,8 +49,8 @@ def parse_unexpected(mistag_fastqs, primers_rad):
     """Return the dicts with the unexpected mistag combinations per type of
     mistag and for each sequence of the fastq files
     """
-    mistag_IDs = {}
-    mistags_all = {'weird': {}, 'unexpected': {}}
+    mistag_unexpected = {}
+    mistag_all = {'weird': {}, 'unexpected': {}}
     # parse both R1 and R2 mistag fastq files
     with open(mistag_fastqs[0]) as f1, open(mistag_fastqs[1]) as f2:
         idx = 0
@@ -60,15 +60,15 @@ def parse_unexpected(mistag_fastqs, primers_rad):
             if idx == 1:
                 combi, typ = get_mistag_combi_type(id1, id2, primers_rad)
                 if typ:
-                    mistag_IDs[id1.split()[0][1:]] = combi
+                    mistag_unexpected[id1.split()[0][1:]] = combi
                     # count the number of combinations per type of mistag
-                    if combi in mistags_all[typ]:
-                        mistags_all[typ][combi] += 1
+                    if combi in mistag_all[typ]:
+                        mistag_all[typ][combi] += 1
                     else:
-                        mistags_all[typ][combi] = 1
+                        mistag_all[typ][combi] = 1
             if idx == 4:
                 idx = 0
-    return mistag_IDs, mistags_all
+    return mistag_unexpected, mistag_all
 
 
 def parse_formatted_input(fastin, design, primers):
@@ -85,11 +85,10 @@ def parse_formatted_input(fastin, design, primers):
     unexpected primer combination
     """
     seq = ''
-    curSeq = {}
     expected = {}
-    nonCritic = {}
+    non_critic = {}
     # parse each sequence of the appropriately formatted fasta file
-    for lindx,line in enumerate(open(fastin, 'rU')):
+    for lindx, line in enumerate(open(fastin, 'rU')):
         # progrssion bar
         if lindx and lindx % 10 == 0:
             print('\r', 'Number of parsed per-sample ISUs:', lindx, end='')
@@ -99,8 +98,16 @@ def parse_formatted_input(fastin, design, primers):
             # fill 'expected' and 'nonCritic' dicts with a parsed sequence
             if len(seq):
                 # update the dicts for expected tage combis and non-critical mistag combis
-                update_dict(pair, expected, nonCritic, seq, n, seqID, primers, f, r, design)
-                curSeq = {}
+                update_dict(
+                    pair,
+                    expected,
+                    non_critic,
+                    seq, n,
+                    seqID,
+                    primers,
+                    f, r,
+                    design
+                )
                 seq = ''
             # current sequence info
             splitID = line.strip()[1:].split(';')
@@ -113,11 +120,20 @@ def parse_formatted_input(fastin, design, primers):
                 elif field.startswith('rev=') or field.startswith('rv'):
                     r = field.split('=')[-1].strip()
             # get the primer pair
-            pair = tuple([f,r])
+            pair = tuple([f, r])
         else:
             seq += line.strip()
     # fill 'expected' and 'nonCritic' dicts with the last parsed sequence
-    update_dict(pair, expected, nonCritic, seq, n, seqID, primers, f, r, design)
+    update_dict(
+        pair,
+        expected,
+        non_critic,
+        seq, n,
+        seqID,
+        primers,
+        f, r,
+        design
+    )
     print()
-    return expected, nonCritic
+    return expected, non_critic
 

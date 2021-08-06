@@ -1,9 +1,10 @@
 import os
 import subprocess
-from multiprocessing import Process, Manager, current_process, cpu_count
+from multiprocessing import cpu_count
 
 from mistag_writer import write_fastas, write_merging_cmd
 from mistag_utils import increment_nested
+
 
 def get_merging_config(soft, folder):
     merging_config_fp = '%s/merging_%s.conf' % (folder, soft)
@@ -11,7 +12,7 @@ def get_merging_config(soft, folder):
     if os.path.isfile(merging_cmd_fp):
         os.remove(merging_cmd_fp)
     merging = {}
-    if os.path.isfile(merging_config_fp) == False:
+    if not os.path.isfile(merging_config_fp):
         o=open(merging_config_fp, 'w')
         if soft == 'vsearch':
             o.write('min_qual,--fastq_qmin,0\n')
@@ -46,9 +47,10 @@ def get_merging_config(soft, folder):
     return merging, merging_cmd_fp
 
 
-def run_merging(folder, fastqs, merging_soft, merging_config, return_dict,
-                merging_cmd_fp):
-    curProc_name = current_process().name
+def run_merging(
+        fastqs, merging_soft, merging_config,
+        fastas, merging_cmd_fp):
+
     cmd = [merging_soft]
     for config_opt, config_val in merging_config.items():
         if config_val[-1]:
@@ -63,22 +65,23 @@ def run_merging(folder, fastqs, merging_soft, merging_config, return_dict,
                             os.path.splitext(fastqs[0])[0]])
             if config_opt == 'out':
                 out = '%s.fasta' % '_'.join(fastqs[0].split('_')[:-1])
-                return_dict[out] = [curProc_name]
+                print('->', out)
+                fastas.append(out)
                 cmd.extend([config_val[0], out])
     process = subprocess.Popen(cmd)
     process.wait()
     write_merging_cmd(merging_cmd_fp, cmd)
 
 
-def get_merging_stats(return_dict, folder, stats_merging):
+def get_merging_stats(fastas, folder, stats_merging):
     """Collect the number of reads in each the fastqs
     sequences submitted to the merging process
     """
     grep_key = ''
     # return_dict: {'<sample>.fasta': 'merging_<sample>', ...}
     # get grep_key as common sequencing identifier (i.e. flowcell)
-    for filin in return_dict.keys():
-        with open(filin) as f:
+    for fasta in fastas:
+        with open(fasta) as f:
             for line in f:
                 grep_key = '\:'.join(line[1:].split(':')[:3])
                 break
@@ -86,10 +89,6 @@ def get_merging_stats(return_dict, folder, stats_merging):
             break
     # grep this each-sequence-entry identifier in each demultiplexed fastq
     cmd = 'grep -cR "%s" %s/*_fwd.fastq' % (grep_key, folder)
-#    try:
-#        p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, encoding='utf8')
-#    except TypeError:
-#        p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
     p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
     p.wait()
     # get for each sample the number of sequences submitted to merging
@@ -101,11 +100,12 @@ def get_merging_stats(return_dict, folder, stats_merging):
         stats_merging[file_key] = [n]
 
 
-def get_derep(return_dict, samples_fastqs, mistag_unexpected, stats_merging):
+def get_derep(fastas, samples_fastqs, mistag_unexpected, stats_merging):
     derep = {}
+    headers = {}
     # for each fasta file outputed by the merging algorithm
-    for fasta in return_dict.keys():
-        # get the relevant deign combination (except if mistag)
+    for fasta in fastas:
+        # get the relevant design combination (except if mistag)
         if fasta.endswith('mistag.fasta'):
             combi = 0
         else:
@@ -123,8 +123,9 @@ def get_derep(return_dict, samples_fastqs, mistag_unexpected, stats_merging):
                         # add previous sequence combi info if told to be added
                         if add:
                             c += 1
-                            increment_nested(derep, seq, combi)
+                            increment_nested(derep, seq, combi, header)
                         seq = ''
+                    header = line[1:].rsplit(':', 1)[0]
                     # every sequence is to be added
                     add = 1
                     # but not necessarily for mistags
@@ -141,53 +142,49 @@ def get_derep(return_dict, samples_fastqs, mistag_unexpected, stats_merging):
             # process the last sequence entry of the fasta file
             if add:
                 c += 1
-                increment_nested(derep, seq, combi)
+                increment_nested(derep, seq, combi, header)
             # update stats_count if the fasta file contain the merged mistags
-            if fasta.endswith('_mistag.fasta') == False:
+            if not fasta.endswith('_mistag.fasta'):
                 file_key = os.path.abspath(fasta)
                 stats_merging[file_key].append(str(c))
     return derep
 
 
-def perform_merging(args, fastin, samples_fastqs, mistag_fastqs,
-                    stats_merging, mistag_unexpected, multiproc):
+def perform_merging(
+        args, fastin, samples_fastqs, mistag_fastqs,
+        stats_merging, mistag_unexpected):
+
     merging_soft = args['m']
     merging_config, merging_cmd_fp = get_merging_config(merging_soft, fastin)
-    if multiproc:
-        jobs_merging = []
-        manager = Manager()
-        return_dict = manager.dict()
-        # perform the merging for each sample fastqs
-        for sample_fastq, sample_fastqs in samples_fastqs.items():
-            pname = 'merging_%s' % sample_fastq.split('/')[-1]
-            print('Process:', pname)
-            p = Process(target = run_merging, args = (fastin,
-                                                    sample_fastqs,
-                                                    merging_soft,
-                                                    merging_config,
-                                                    return_dict,
-                                                    merging_cmd_fp,),
-                                                    name=pname)
-            jobs_merging.append(p)
-            p.start()
-        for job_merging in jobs_merging:
-            job_merging.join()
-    else:
-        return_dict = {}
-        for sample_fastq, sample_fastqs in samples_fastqs.items():
-            pname = 'merging_%s' % sample_fastq.split('/')[-1]
-            print('Process:', pname)
-            run_merging(fastin, sample_fastqs, merging_soft, merging_config,
-                        return_dict, merging_cmd_fp)
+
+    fastas = []
+    for sample_fastq, sample_fastqs in samples_fastqs.items():
+        pname = 'merging_%s' % sample_fastq.split('/')[-1]
+        print('Process:', pname)
+        run_merging(
+            sample_fastqs,
+            merging_soft,
+            merging_config,
+            fastas,
+            merging_cmd_fp
+        )
     # also perform the merging for the mistag fastqs
     pname = 'merging_mistags'
     print('Process:', pname)
-    run_merging(fastin, mistag_fastqs, merging_soft, merging_config,
-                return_dict, merging_cmd_fp)
+    run_merging(
+        mistag_fastqs,
+        merging_soft,
+        merging_config,
+        fastas,
+        merging_cmd_fp
+    )
     print('All mergings complete!')
-    get_merging_stats(return_dict, fastin, stats_merging)
-    derep = get_derep(return_dict, samples_fastqs, mistag_unexpected,
-                      stats_merging)
-    fastout = write_fastas(fastin, derep, stats_merging)
-    return fastout
+    get_merging_stats(
+        fastas, fastin, stats_merging
+    )
+    derep = get_derep(
+        fastas, samples_fastqs, mistag_unexpected, stats_merging
+    )
+    fastout = write_fastas(fastin, derep)
+    return fastout, derep
 

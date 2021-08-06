@@ -66,19 +66,22 @@ mistagging.py [-h] -i I -d D [-o [O]] [-sep [SEP]] [-a [float between 0 and 1, m
 
 ```
   -h, --help            show this help message and exit
-  -i I                  Input fasta file name (required)
+  -i I                  Input fasta file name [or library folder containing the
+                        `_fwd.fastq` and `_rev.fastq` files and the
+                        `_mistag_R1.fastq` and `_mistag_R2.fastq` files] (required)
   -d D                  Multiplexing design file name (required)
-  -o [O]                Output fasta file (default = input appended with
-                        'mistagFiltered.txt')
+  -o [O]                Output fasta file (default=input appended with
+                        'mistagFiltered.fasta')
   -a [float between 0 and 1, max. 3 decimals]
                         Alpha level for finding the Student's T critical value
-                        for the Thomson Tau rejection region calulation
-                        (default = 0.05)
-  -s [S]                Field separator in multiplexing design file (default =
-                        ',')
+                        for the modified Thompson Tau rejection region
+                        calulation (default=0.05)
   --out                 Leave expected sample sequences out of non-critical
                         mistags distribution for calculations of the rejection
-                        region (default = not active)
+                        region (default=not active)
+  -m [{pandaseq,vsearch}]
+                        Reads merging software - which must be installed and
+                        running (default=pandaseq)
 ```
 
 ## Requirements

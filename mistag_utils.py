@@ -1,6 +1,7 @@
 import sys
 import re
 
+
 def update_dict(pair, expected, nonCritic, seq,
                 n, seqID, primers, f, r, design):
     """
@@ -22,9 +23,12 @@ def add_key(d, pair, seq, n, seqID):
     """
     if pair in d:
         if seq in d[pair]:
-            print('Error: sequence "%s" already encountered (with size=%s) for \
-the current primer combination "%s" (now with size=%s)\nExiting' %
-            (seq, d[pair][seq][0], ' + '.join(pair), n))
+            print(
+                'Error: sequence "%s" already encountered '
+                '(with size=%s) for the current primer combination '
+                '"%s" (now with size=%s)\nExiting' % (
+                    seq, d[pair][seq][0], ' + '.join(pair), n)
+            )
             sys.exit()
         else:
             d[pair][seq] = [int(n), seqID]
@@ -73,16 +77,17 @@ def add_to_dict_list(S, d):
                 break
 
 
-def increment_nested(d, s, c):
+def increment_nested(d, s, c, h):
     """Update the dict with the number of sequence copies per combination
     """
     if s in d:
         if c in d[s]:
-            d[s][c] += 1
+            d[s][c][0] += 1
+            d[s][c][1].append(h)
         else:
-            d[s][c] = 1
+            d[s][c] = [1, [h]]
     else:
-        d[s] = {c: 1}
+        d[s] = {c: [1, [h]]}
 
 
 def get_mistag_combi_type(id1, id2, primers_rad):
