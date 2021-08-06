@@ -55,7 +55,7 @@ def get_fastqs(fastin, design):
     combi_fastqs = {}
     for _, (fwd, rev, cmb) in samples_fastqs.items():
         if cmb in combi_fastqs:
-            print('%s affected twice...' % cmb)
+            print('%s affected twice...' % ' + '.join(list(cmb)))
             sys.exit()
         combi_fastqs[cmb] = [fwd, rev]
 
