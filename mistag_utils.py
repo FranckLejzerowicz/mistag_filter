@@ -72,7 +72,9 @@ def add_to_dict_list(S, d):
     """
     for s in S:
         for k, v in d.items():
-            if '_%s_' % k in s:
+            print(k, s)
+            if '_%s' % k in s:
+                print('!!!')
                 S[s].append(v)
                 break
 
