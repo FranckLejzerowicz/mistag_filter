@@ -56,7 +56,6 @@ def get_fastqs(fastin, design):
     print()
     print()
     print(samples_fastqs)
-
     combi_fastqs = {}
     for _, (fwd, rev, cmb) in samples_fastqs.items():
         print(fwd, rev, cmb)
