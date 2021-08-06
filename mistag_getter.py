@@ -42,11 +42,10 @@ def get_fastqs(fastin, design):
     """
     samples_fastqs = {}
     # get the fwd/rev fasta files per sample
-    files = glob.glob('%s/*fastq' % fastin)
+    files = glob.glob('%s/*_fwd.fastq' % fastin)
     for f in sorted(files):
         fsplit = f.split('_')
-        if fsplit[-1] in ['rev.fastq', 'fwd.fastq']:
-            samples_fastqs.setdefault('_'.join(fsplit[:-1]), []).append(f)
+        samples_fastqs['_'.join(fsplit[:-1])] = [f, f.replace('_fwd.fastq', '_rev.fastq')]
     # invert the combito-sample to samples-to-combi dict
     design_rev = rev_dict(design)
     print()
