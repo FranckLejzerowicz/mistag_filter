@@ -48,17 +48,10 @@ def get_fastqs(fastin, design):
         samples_fastqs['_'.join(fsplit[:-1])] = [f, f.replace('_fwd.fastq', '_rev.fastq')]
     # invert the combito-sample to samples-to-combi dict
     design_rev = rev_dict(design)
-    print()
-    print()
-    print(design_rev)
     # add the sample name for each fwd/rev fastqs list
     add_to_dict_list(samples_fastqs, design_rev)
-    print()
-    print()
-    print(samples_fastqs)
     combi_fastqs = {}
     for _, (fwd, rev, cmb) in samples_fastqs.items():
-        print(fwd, rev, cmb)
         if cmb in combi_fastqs:
             print('%s affected twice...' % ' + '.join(list(cmb)))
             sys.exit()
